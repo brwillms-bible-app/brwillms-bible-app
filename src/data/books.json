@@ -1,0 +1,44 @@
+{
+  "_note": "Book intros are written by our team in our own words. They contain no ESV text.",
+  "books": {
+    "Genesis": {
+      "testament": "Old Testament",
+      "author": "Traditionally Moses",
+      "written": "Around 1440–1400 BC (traditional view)",
+      "focus": "Beginnings: God creates the world, people break trust with him, and God starts a rescue plan through one family — Abraham, Isaac, Jacob, and Joseph.",
+      "objectives": [
+        "God made everything, and he called it good.",
+        "Every person is made in God's image and has great worth.",
+        "Sin breaks our relationship with God and each other.",
+        "God keeps his promises, even when people mess up."
+      ],
+      "color": "#ffb347"
+    },
+    "Luke": {
+      "testament": "New Testament",
+      "author": "Luke, a doctor and travel companion of Paul",
+      "written": "Around AD 60",
+      "focus": "A careful, orderly account of Jesus' life, showing that he came for everyone — the poor, the outsider, and the forgotten.",
+      "objectives": [
+        "Jesus is the promised Savior for all people.",
+        "God cares deeply about the lost and the overlooked.",
+        "Prayer and the Holy Spirit play a big part in Jesus' ministry.",
+        "The good news is true and can be trusted."
+      ],
+      "color": "#6ec6ff"
+    },
+    "John": {
+      "testament": "New Testament",
+      "author": "John, one of Jesus' twelve disciples",
+      "written": "Around AD 85–95",
+      "focus": "Who is Jesus? John answers with signs, conversations, and 'I am' statements so readers will believe and have life in his name.",
+      "objectives": [
+        "Jesus is fully God and became a real human.",
+        "Jesus' miracles are signs pointing to who he is.",
+        "Believing in Jesus brings eternal life.",
+        "Jesus' followers are called to love one another."
+      ],
+      "color": "#b39ddb"
+    }
+  }
+}

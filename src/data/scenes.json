@@ -1,0 +1,69 @@
+{
+  "_note": "Scenes map OUR artwork and timing cues to verse REFERENCES only. Never put ESV text in this file.",
+  "scenes": [
+    {
+      "id": "abram-called",
+      "book": "Genesis",
+      "title": "Abram's Big Journey",
+      "passage": "Genesis 12:1-9",
+      "image": "/art/genesis-12.jpg",
+      "duration": 60,
+      "objectiveId": "gen12-trust-obey",
+      "mapRoute": "haran-to-shechem"
+    },
+    {
+      "id": "creation-light",
+      "book": "Genesis",
+      "title": "Day One: Light Shines",
+      "passage": "Genesis 1:1-5",
+      "image": "/art/creation-light.svg",
+      "duration": 30,
+      "mapId": "ancient-near-east"
+    },
+    {
+      "id": "creation-sky-sea-land",
+      "book": "Genesis",
+      "title": "Sky, Sea, and Land",
+      "passage": "Genesis 1:6-13",
+      "image": "/art/creation-land.svg",
+      "duration": 45,
+      "mapId": "ancient-near-east"
+    },
+    {
+      "id": "creation-sun-stars-animals",
+      "book": "Genesis",
+      "title": "Sun, Stars, and Critters",
+      "passage": "Genesis 1:14-25",
+      "image": "/art/creation-animals.svg",
+      "duration": 70,
+      "mapId": "ancient-near-east"
+    },
+    {
+      "id": "creation-people",
+      "book": "Genesis",
+      "title": "People Made in God's Image",
+      "passage": "Genesis 1:26-31",
+      "image": "/art/creation-people.svg",
+      "duration": 40,
+      "mapId": "ancient-near-east"
+    },
+    {
+      "id": "word-was-god",
+      "book": "John",
+      "title": "The Word and the Light",
+      "passage": "John 1:1-5",
+      "image": "/art/john-word.svg",
+      "duration": 18,
+      "mapId": "galilee-judea"
+    },
+    {
+      "id": "shepherds-angels",
+      "book": "Luke",
+      "title": "Shepherds and Angels",
+      "passage": "Luke 2:8-14",
+      "image": "/art/shepherds.svg",
+      "duration": 35,
+      "mapId": "bethlehem"
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "_note": "Map panels authored by us. Locations are approximate [longitude, latitude]; x/y are for the offline SVG fallback (0-100 grid).",
+  "maps": {
+    "ancient-near-east": {
+      "title": "The Ancient Near East",
+      "context": "Genesis 1 sets the stage for the whole Bible. Later chapters follow Abraham's family across the Fertile Crescent, from Ur to Canaan to Egypt.",
+      "center": [
+        38.5,
+        32.5
+      ],
+      "zoom": 4,
+      "places": [
+        {
+          "name": "Ur",
+          "lng": 46.1,
+          "lat": 30.96,
+          "x": 82,
+          "y": 70
+        },
+        {
+          "name": "Haran",
+          "lng": 39.03,
+          "lat": 36.87,
+          "x": 58,
+          "y": 22
+        },
+        {
+          "name": "Canaan",
+          "lng": 35.28,
+          "lat": 32.21,
+          "x": 32,
+          "y": 48
+        },
+        {
+          "name": "Egypt (Memphis)",
+          "lng": 31.25,
+          "lat": 29.85,
+          "x": 14,
+          "y": 78
+        }
+      ]
+    },
+    "galilee-judea": {
+      "title": "Galilee and Judea",
+      "context": "John wrote for believers across the Roman world, telling the story of Jesus, who taught in Galilee and Jerusalem.",
+      "center": [
+        35.4,
+        32.3
+      ],
+      "zoom": 7.4,
+      "places": [
+        {
+          "name": "Sea of Galilee",
+          "lng": 35.59,
+          "lat": 32.82,
+          "x": 62,
+          "y": 22
+        },
+        {
+          "name": "Nazareth",
+          "lng": 35.3,
+          "lat": 32.7,
+          "x": 46,
+          "y": 28
+        },
+        {
+          "name": "Jerusalem",
+          "lng": 35.235,
+          "lat": 31.778,
+          "x": 48,
+          "y": 70
+        },
+        {
+          "name": "Jordan River",
+          "lng": 35.55,
+          "lat": 31.85,
+          "x": 66,
+          "y": 48
+        }
+      ]
+    },
+    "bethlehem": {
+      "title": "Around Bethlehem",
+      "context": "Bethlehem was a small town about six miles south of Jerusalem — King David's hometown. Shepherds kept flocks in the hills nearby.",
+      "center": [
+        35.3,
+        31.68
+      ],
+      "zoom": 9.3,
+      "places": [
+        {
+          "name": "Jerusalem",
+          "lng": 35.235,
+          "lat": 31.778,
+          "x": 52,
+          "y": 34
+        },
+        {
+          "name": "Bethlehem",
+          "lng": 35.2,
+          "lat": 31.705,
+          "x": 46,
+          "y": 62
+        },
+        {
+          "name": "Shepherds' fields",
+          "lng": 35.228,
+          "lat": 31.7,
+          "x": 62,
+          "y": 70
+        },
+        {
+          "name": "Dead Sea",
+          "lng": 35.48,
+          "lat": 31.55,
+          "x": 84,
+          "y": 55
+        }
+      ]
+    }
+  },
+  "routes": {
+    "haran-to-shechem": {
+      "title": "Abram's Journey: Haran to Canaan",
+      "context": "Abram leaves Haran in the north and travels roughly 400 miles (650 km) south to Shechem in the land of Canaan, then on toward Bethel and the Negev. The line is an approximate path for kids, not an exact historical route.",
+      "stops": [
+        {
+          "name": "Haran",
+          "lng": 39.03,
+          "lat": 36.87,
+          "kind": "start"
+        },
+        {
+          "name": "Shechem (Canaan)",
+          "lng": 35.28,
+          "lat": 32.21,
+          "kind": "end"
+        }
+      ],
+      "path": [
+        [
+          39.03,
+          36.87
+        ],
+        [
+          37.6,
+          36.2
+        ],
+        [
+          36.9,
+          35.0
+        ],
+        [
+          36.3,
+          33.5
+        ],
+        [
+          35.6,
+          32.8
+        ],
+        [
+          35.28,
+          32.21
+        ]
+      ]
+    }
+  }
+}

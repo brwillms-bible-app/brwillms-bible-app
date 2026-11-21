@@ -9,7 +9,11 @@ export default function Home() {
       <section className="hero">
         <h1>Explore the Bible, one picture at a time ✨</h1>
         <p>
-          Pick a scene to see the artwork, read the passage, and listen to the official ESV audio — all streamed live.
+          Pick a scene to see the artwork, read the passage, and listen to the audio — all streamed live.
+        </p>
+        <p>
+          The base text is the Berean Standard Bible, which is in the public domain. The ESV is an optional later
+          route, under Crossway&apos;s non-commercial terms.
         </p>
       </section>
       {featured && (

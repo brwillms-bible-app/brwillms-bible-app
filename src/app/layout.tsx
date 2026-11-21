@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Picture Bible Adventures",
-  description: "A free, non-commercial illustrated audio-visual Bible explorer.",
+  description: "A free, non-commercial illustrated audio-visual Bible explorer. The base text is the public-domain Berean Standard Bible.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

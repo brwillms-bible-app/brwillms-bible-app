@@ -1,12 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { audioEntries, audioMap, findAudioEntry, isSafeAudioFilePath, MAX_TTS_CHARS } from "@/lib/speech/audioMap";
-import { bsbTextLength, handleSpeechRequest } from "@/lib/speech/speechRoute";
+import {
+  audioEntries,
+  findAudioEntry,
+  isSafeAudioFilePath,
+  joinedStubText,
+  MAX_TTS_CHARS,
+  reconstructBsbText,
+  segmentSpeakers,
+} from "@/lib/speech/audioMap";
+import { concatMpeg, bsbTextLength, handleSpeechRequest } from "@/lib/speech/speechRoute";
 import { parseReference } from "@/lib/bible/reference";
+import { resolveVoice, voiceEnvChain, voiceRoles } from "@/lib/speech/voices";
 
 const SECRET = "sk_test_ELEVENLABS_SERVER_KEY_DO_NOT_LEAK";
-const VOICE = "voice_NARRATOR_PLACEHOLDER";
+const VOICE_NARRATOR = "voice_NARRATOR_PLACEHOLDER";
+const VOICE_JESUS = "voice_JESUS_PLACEHOLDER";
+const VOICE_GOD = "voice_GOD_PLACEHOLDER";
+const VOICE_PETER = "voice_PETER_PLACEHOLDER";
+const VOICE_ABRAM = "voice_ABRAM_PLACEHOLDER";
+const DEFAULT_ROGER = "CwhRBWXzGAHq8TQ4Fs17";
+const DEFAULT_KAI = "hfqsl1OMbiWsgPpht3el";
+const DEFAULT_BRIAN = "PGoKnSD4gKn2aS99wOR2";
 const root = path.resolve(__dirname, "..");
 
 const req = (ref: string, extra: Record<string, string> = {}) => {
@@ -20,17 +36,22 @@ async function dump(res: Response) {
   return JSON.stringify([...res.headers.entries()]) + (await res.clone().text());
 }
 
+function genesisEntry() {
+  const entry = audioEntries.find((e) => e.id === "genesis-12");
+  expect(entry?.kind).toBe("tts-segments");
+  if (!entry || entry.kind !== "tts-segments") throw new Error("genesis-12 missing");
+  return entry;
+}
+
 describe("audio map", () => {
   it("follows the artwork-mapping pattern: valid refs, BSB-only TTS, safe file paths", () => {
-    expect(audioMap.voices.narrator.voiceEnv).toBe("ELEVENLABS_VOICE_NARRATOR");
-    expect(audioMap.voices.jesus.voiceEnv).toBe("ELEVENLABS_VOICE_JESUS");
-    expect(audioMap.voices.peter.voiceEnv).toBe("ELEVENLABS_VOICE_PETER");
     expect(audioEntries.length).toBeGreaterThanOrEqual(2);
 
     const john = audioEntries.find((e) => e.id === "john-21-voice-test");
     expect(john).toMatchObject({ kind: "file", passage: "John 21:1-25", file: "/audio/john-21-voice-test.mp3" });
-    const gen = audioEntries.find((e) => e.id === "genesis-12");
-    expect(gen).toMatchObject({ kind: "tts", passage: "Genesis 12:1-9", translation: "bsb" });
+    const gen = genesisEntry();
+    expect(gen).toMatchObject({ kind: "tts-segments", passage: "Genesis 12:1-9", translation: "bsb" });
+    expect(gen.segments.length).toBe(5);
 
     for (const entry of audioEntries) {
       expect(parseReference(entry.passage).ok, entry.passage).toBe(true);
@@ -38,9 +59,8 @@ describe("audio map", () => {
         expect(isSafeAudioFilePath(entry.file), entry.file).toBe(true);
       } else {
         expect(entry.translation).toBe("bsb");
-        expect(entry.speakers.length).toBeGreaterThan(0);
-        for (const role of entry.speakers) {
-          expect(audioMap.voices[role]?.voiceEnv).toMatch(/^ELEVENLABS_VOICE_/);
+        for (const role of segmentSpeakers(entry)) {
+          expect(voiceEnvChain(role)[voiceEnvChain(role).length - 1]).toBe("ELEVENLABS_VOICE_NARRATOR");
         }
       }
     }
@@ -54,6 +74,108 @@ describe("audio map", () => {
     expect(findAudioEntry("Psalm 23")).toBeUndefined();
     const john = audioEntries.find((e) => e.kind === "file" && e.id === "john-21-voice-test");
     expect(john && john.kind === "file" && fs.existsSync(path.join(root, "public", john.file.slice(1)))).toBe(false);
+  });
+});
+
+describe("Genesis 12 segmentation", () => {
+  it("reconstructs the exact bundled BSB wording (quotes restored, speech tags stay with the narrator)", () => {
+    const gen = genesisEntry();
+    const joined = joinedStubText("Genesis", 12, 1, 9);
+    expect(joined).toBeTruthy();
+    expect(reconstructBsbText(gen.segments)).toBe(joined);
+    // Dialogue omits wrapping quotes in the spoken text; narrator keeps speech tags.
+    expect(gen.segments[0]).toMatchObject({ speaker: "narrator", quoted: false, verses: "1" });
+    expect(gen.segments[0].text).toBe("Then the LORD said to Abram,");
+    expect(gen.segments[1]).toMatchObject({ speaker: "the_lord", quoted: true, verses: "1-3" });
+    expect(gen.segments[1].text.startsWith("Leave your country")).toBe(true);
+    expect(gen.segments[1].text.includes("\u201c") || gen.segments[1].text.includes("\u201d")).toBe(false);
+    expect(gen.segments[3]).toMatchObject({ speaker: "the_lord", quoted: true, verses: "7" });
+    expect(gen.segments[3].text).toBe("I will give this land to your offspring.");
+    expect(gen.segments.map((s) => s.speaker)).toEqual(["narrator", "the_lord", "narrator", "the_lord", "narrator"]);
+    // Scene is 1-9 only; Abram and Pharaoh have no lines here.
+    expect(gen.segments.some((s) => s.speaker === "abram" || s.speaker === "pharaoh")).toBe(false);
+  });
+
+  it("matches the official BSB file when present", () => {
+    const officialPath = "/tmp/bsb/bsb.txt";
+    if (!fs.existsSync(officialPath)) return;
+    const official: Record<number, string> = {};
+    for (const line of fs.readFileSync(officialPath, "utf8").split("\n")) {
+      if (!line.startsWith("Genesis 12:")) continue;
+      const [ref, text] = line.split("\t");
+      official[Number(ref.split(":")[1])] = text.replace(/\r$/, "");
+    }
+    const joined = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => official[n]).join(" ");
+    expect(reconstructBsbText(genesisEntry().segments)).toBe(joined);
+  });
+});
+
+describe("role-to-voice resolution", () => {
+  beforeEach(() => vi.unstubAllEnvs());
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("documents fallback chains and uses the first set env var", () => {
+    expect(voiceEnvChain("narrator")).toEqual(["ELEVENLABS_VOICE_NARRATOR"]);
+    expect(voiceEnvChain("the_lord")).toEqual([
+      "ELEVENLABS_VOICE_GOD",
+      "ELEVENLABS_VOICE_JESUS",
+      "ELEVENLABS_VOICE_NARRATOR",
+    ]);
+    expect(voiceEnvChain("abram")).toEqual([
+      "ELEVENLABS_VOICE_ABRAM",
+      "ELEVENLABS_VOICE_PETER",
+      "ELEVENLABS_VOICE_NARRATOR",
+    ]);
+    expect(voiceEnvChain("pharaoh")).toEqual(["ELEVENLABS_VOICE_PHARAOH", "ELEVENLABS_VOICE_NARRATOR"]);
+    expect(voiceEnvChain("unknown_role")).toEqual(["ELEVENLABS_VOICE_NARRATOR"]);
+  });
+
+  it("uses baked-in Roger, Kai, and Brian IDs when env vars are unset", () => {
+    expect(voiceRoles.narrator.defaultVoiceId).toBe(DEFAULT_ROGER);
+    expect(voiceRoles.jesus.defaultVoiceId).toBe(DEFAULT_KAI);
+    expect(voiceRoles.peter.defaultVoiceId).toBe(DEFAULT_BRIAN);
+    expect(voiceRoles.peter.todo).toBeUndefined();
+    expect(resolveVoice("narrator")).toEqual({
+      ok: true, role: "narrator", voiceId: DEFAULT_ROGER, fromEnv: "ELEVENLABS_VOICE_NARRATOR", source: "default",
+    });
+    expect(resolveVoice("the_lord")).toEqual({
+      ok: true, role: "the_lord", voiceId: DEFAULT_KAI, fromEnv: "ELEVENLABS_VOICE_JESUS", source: "default",
+    });
+    expect(resolveVoice("jesus")).toMatchObject({ voiceId: DEFAULT_KAI, source: "default" });
+    expect(resolveVoice("peter")).toMatchObject({ voiceId: DEFAULT_BRIAN, fromEnv: "ELEVENLABS_VOICE_PETER", source: "default" });
+    expect(resolveVoice("abram")).toMatchObject({ voiceId: DEFAULT_BRIAN, fromEnv: "ELEVENLABS_VOICE_PETER", source: "default" });
+    expect(resolveVoice("pharaoh")).toMatchObject({ voiceId: DEFAULT_ROGER, fromEnv: "ELEVENLABS_VOICE_NARRATOR", source: "default" });
+  });
+
+  it("lets env vars override defaults: GOD -> JESUS -> NARRATOR", () => {
+    vi.stubEnv("ELEVENLABS_VOICE_GOD", VOICE_GOD);
+    vi.stubEnv("ELEVENLABS_VOICE_JESUS", VOICE_JESUS);
+    vi.stubEnv("ELEVENLABS_VOICE_NARRATOR", VOICE_NARRATOR);
+    expect(resolveVoice("the_lord")).toEqual({
+      ok: true, role: "the_lord", voiceId: VOICE_GOD, fromEnv: "ELEVENLABS_VOICE_GOD", source: "env",
+    });
+
+    vi.stubEnv("ELEVENLABS_VOICE_GOD", "");
+    expect(resolveVoice("the_lord")).toEqual({
+      ok: true, role: "the_lord", voiceId: VOICE_JESUS, fromEnv: "ELEVENLABS_VOICE_JESUS", source: "env",
+    });
+
+    vi.stubEnv("ELEVENLABS_VOICE_JESUS", "");
+    // No JESUS env, so Kai's baked-in default is used before narrator.
+    expect(resolveVoice("the_lord")).toEqual({
+      ok: true, role: "the_lord", voiceId: DEFAULT_KAI, fromEnv: "ELEVENLABS_VOICE_JESUS", source: "default",
+    });
+  });
+
+  it("lets ABRAM and PETER env vars override Brian's default, and PHARAOH fall back to Roger", () => {
+    vi.stubEnv("ELEVENLABS_VOICE_NARRATOR", VOICE_NARRATOR);
+    vi.stubEnv("ELEVENLABS_VOICE_PETER", VOICE_PETER);
+    vi.stubEnv("ELEVENLABS_VOICE_ABRAM", "");
+    vi.stubEnv("ELEVENLABS_VOICE_PHARAOH", "");
+    expect(resolveVoice("abram")).toMatchObject({ voiceId: VOICE_PETER, fromEnv: "ELEVENLABS_VOICE_PETER", source: "env" });
+    vi.stubEnv("ELEVENLABS_VOICE_ABRAM", VOICE_ABRAM);
+    expect(resolveVoice("abram")).toMatchObject({ voiceId: VOICE_ABRAM, fromEnv: "ELEVENLABS_VOICE_ABRAM", source: "env" });
+    expect(resolveVoice("pharaoh")).toMatchObject({ voiceId: VOICE_NARRATOR, fromEnv: "ELEVENLABS_VOICE_NARRATOR", source: "env" });
   });
 });
 
@@ -83,7 +205,7 @@ describe("/api/speech", () => {
 
   it("returns 501 when the Genesis 12 TTS entry has no API key, and does not call ElevenLabs", async () => {
     vi.stubEnv("ELEVENLABS_API_KEY", "");
-    vi.stubEnv("ELEVENLABS_VOICE_NARRATOR", VOICE);
+    vi.stubEnv("ELEVENLABS_VOICE_NARRATOR", VOICE_NARRATOR);
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     const res = await handleSpeechRequest(req("Genesis 12"));
@@ -95,15 +217,23 @@ describe("/api/speech", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("returns 501 when the narrator voice ID env var is missing", async () => {
+  it("uses baked-in Roger and Kai IDs when voice env vars are unset (only the API key is required)", async () => {
     vi.stubEnv("ELEVENLABS_API_KEY", SECRET);
     vi.stubEnv("ELEVENLABS_VOICE_NARRATOR", "");
-    const fetchSpy = vi.fn();
+    vi.stubEnv("ELEVENLABS_VOICE_JESUS", "");
+    vi.stubEnv("ELEVENLABS_VOICE_GOD", "");
+    const gen = genesisEntry();
+    const fetchSpy = vi.fn(async (url: string) => {
+      const index = fetchSpy.mock.calls.length - 1;
+      const segment = gen.segments[index];
+      const expected = segment.speaker === "the_lord" ? DEFAULT_KAI : DEFAULT_ROGER;
+      expect(String(url)).toBe(`https://api.elevenlabs.io/v1/text-to-speech/${expected}`);
+      return new Response(new Uint8Array([0xff, 0xfb, 1]), { status: 200, headers: { "content-type": "audio/mpeg" } });
+    });
     vi.stubGlobal("fetch", fetchSpy);
     const res = await handleSpeechRequest(req("Genesis 12:1-9"));
-    expect(res.status).toBe(501);
-    expect((await res.json()).message).toMatch(/ELEVENLABS_VOICE_NARRATOR/);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledTimes(5);
   });
 
   it("refuses ESV and arbitrary text, and never caches those errors", async () => {
@@ -130,19 +260,25 @@ describe("/api/speech", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("synthesizes bundled BSB text only, sends the key only upstream, and allows BSB cache headers", async () => {
+  it("synthesizes each Genesis 12 segment with the resolved voice and concatenates the MP3s", async () => {
     vi.stubEnv("ELEVENLABS_API_KEY", SECRET);
-    vi.stubEnv("ELEVENLABS_VOICE_NARRATOR", VOICE);
+    vi.stubEnv("ELEVENLABS_VOICE_NARRATOR", VOICE_NARRATOR);
+    vi.stubEnv("ELEVENLABS_VOICE_JESUS", VOICE_JESUS);
+    vi.stubEnv("ELEVENLABS_VOICE_GOD", "");
+    const gen = genesisEntry();
+    const chunks = gen.segments.map((_, i) => new Uint8Array([0xff, 0xfb, i + 1]));
+    let index = 0;
     const fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
-      expect(String(url)).toBe(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE}`);
+      const segment = gen.segments[index];
+      const expectedVoice = segment.speaker === "the_lord" ? VOICE_JESUS : VOICE_NARRATOR;
+      expect(String(url)).toBe(`https://api.elevenlabs.io/v1/text-to-speech/${expectedVoice}`);
       const headers = init!.headers as Record<string, string>;
       expect(headers["xi-api-key"]).toBe(SECRET);
       const body = JSON.parse(String(init!.body));
-      expect(body.text).toMatch(/Abram/);
+      expect(body.text).toBe(segment.text);
       expect(body.text).not.toMatch(/Placeholder/);
-      expect(body.text.length).toBeLessThanOrEqual(MAX_TTS_CHARS);
       expect(JSON.stringify(body)).not.toContain(SECRET);
-      return new Response(new Uint8Array([0xff, 0xfb, 0x90]), { status: 200, headers: { "content-type": "audio/mpeg" } });
+      return new Response(chunks[index++], { status: 200, headers: { "content-type": "audio/mpeg" } });
     });
     vi.stubGlobal("fetch", fetchSpy);
     const res = await handleSpeechRequest(req("Genesis 12"));
@@ -150,13 +286,13 @@ describe("/api/speech", () => {
     expect(res.headers.get("content-type")).toBe("audio/mpeg");
     expect(res.headers.get("cache-control")).toMatch(/public/);
     expect(await dump(res)).not.toContain(SECRET);
-    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([0xff, 0xfb, 0x90]));
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(concatMpeg(chunks));
+    expect(fetchSpy).toHaveBeenCalledTimes(5);
   });
 
   it("does not leak the key when the speech service errors", async () => {
     vi.stubEnv("ELEVENLABS_API_KEY", SECRET);
-    vi.stubEnv("ELEVENLABS_VOICE_NARRATOR", VOICE);
+    vi.stubEnv("ELEVENLABS_VOICE_NARRATOR", VOICE_NARRATOR);
     vi.stubGlobal("fetch", vi.fn(async () => new Response(`bad key ${SECRET}`, { status: 401 })));
     const res = await handleSpeechRequest(req("Genesis 12:1-9"));
     expect(res.status).toBe(502);

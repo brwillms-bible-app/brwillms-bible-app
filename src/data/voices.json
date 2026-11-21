@@ -1,0 +1,53 @@
+{
+  "_note": "Maps speaker roles to ElevenLabs voices. defaultVoiceId values are public voice IDs (not secrets) and may be overridden by the matching env var. The API key is never stored here — only ELEVENLABS_API_KEY on the server. Resolution for a role: env var if set, else that role's defaultVoiceId, then each fallback the same way, ending at the narrator (Roger).",
+  "roles": {
+    "narrator": {
+      "voiceEnv": "ELEVENLABS_VOICE_NARRATOR",
+      "fallbackEnvs": [],
+      "defaultVoiceId": "CwhRBWXzGAHq8TQ4Fs17",
+      "cast": "Roger — narrator, speech tags, and the final fallback for every role"
+    },
+    "jesus": {
+      "voiceEnv": "ELEVENLABS_VOICE_JESUS",
+      "fallbackEnvs": [
+        "ELEVENLABS_VOICE_NARRATOR"
+      ],
+      "defaultVoiceId": "hfqsl1OMbiWsgPpht3el",
+      "cast": "Kai — Jesus, and the default divine voice for the LORD"
+    },
+    "the_lord": {
+      "voiceEnv": "ELEVENLABS_VOICE_GOD",
+      "fallbackEnvs": [
+        "ELEVENLABS_VOICE_JESUS",
+        "ELEVENLABS_VOICE_NARRATOR"
+      ],
+      "defaultVoiceId": "",
+      "cast": "The LORD. Optional dedicated God voice (ELEVENLABS_VOICE_GOD); otherwise Kai, then Roger"
+    },
+    "peter": {
+      "voiceEnv": "ELEVENLABS_VOICE_PETER",
+      "fallbackEnvs": [
+        "ELEVENLABS_VOICE_NARRATOR"
+      ],
+      "defaultVoiceId": "PGoKnSD4gKn2aS99wOR2",
+      "cast": "Brian — Peter, and the default voice for Abram (main human character)"
+    },
+    "abram": {
+      "voiceEnv": "ELEVENLABS_VOICE_ABRAM",
+      "fallbackEnvs": [
+        "ELEVENLABS_VOICE_PETER",
+        "ELEVENLABS_VOICE_NARRATOR"
+      ],
+      "defaultVoiceId": "",
+      "cast": "Abram. Optional ELEVENLABS_VOICE_ABRAM; otherwise Brian, then Roger. No spoken lines in Genesis 12:1-9."
+    },
+    "pharaoh": {
+      "voiceEnv": "ELEVENLABS_VOICE_PHARAOH",
+      "fallbackEnvs": [
+        "ELEVENLABS_VOICE_NARRATOR"
+      ],
+      "defaultVoiceId": "",
+      "cast": "Pharaoh. Optional; otherwise Roger. No spoken lines in Genesis 12:1-9."
+    }
+  }
+}

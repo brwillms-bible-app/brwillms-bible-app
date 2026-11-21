@@ -95,5 +95,10 @@ describe("compliance guards", () => {
     expect(example).toMatch(/^ESV_API_KEY=$/m);
     expect(example).toMatch(/^ELEVENLABS_API_KEY=$/m);
     expect(example).toMatch(/^ELEVENLABS_VOICE_NARRATOR=$/m);
+    expect(example).toMatch(/^ELEVENLABS_VOICE_JESUS=$/m);
+    expect(example).toMatch(/^ELEVENLABS_VOICE_PETER=$/m);
+    expect(example).toMatch(/^ELEVENLABS_VOICE_GOD=$/m);
+    expect(example).toMatch(/^ELEVENLABS_VOICE_ABRAM=$/m);
+    expect(example).toMatch(/^ELEVENLABS_VOICE_PHARAOH=$/m);
   });
 });

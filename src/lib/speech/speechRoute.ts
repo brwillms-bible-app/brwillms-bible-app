@@ -4,9 +4,18 @@ import path from "node:path";
 import genesis12 from "@/data/bsb-stub/genesis-12.json";
 import { parseReference, validatePassageRequest, type ParsedPassage } from "@/lib/bible/reference";
 import { jsonNoStore } from "@/lib/esv/responses";
-import { audioMap, findAudioEntry, isSafeAudioFilePath, MAX_TTS_CHARS, type TtsAudioEntry } from "./audioMap";
+import {
+  findAudioEntry,
+  isSafeAudioFilePath,
+  MAX_TTS_CHARS,
+  type SpeechSegment,
+  type TtsAudioEntry,
+  type TtsSegmentsEntry,
+} from "./audioMap";
+import { resolveVoice } from "./voices";
 
 const BSB_CACHE = "public, max-age=3600, s-maxage=86400";
+const TTS_MODEL = "eleven_multilingual_v2";
 
 function envValue(name: string): string {
   return (process.env[name] ?? "").trim();
@@ -41,41 +50,17 @@ function publicFilePath(file: string): string | undefined {
   return path.join(process.cwd(), "public", file.slice(1));
 }
 
-async function synthesizeBsb(entry: TtsAudioEntry, passage: ParsedPassage): Promise<Response> {
-  if (entry.translation !== "bsb") {
-    return jsonNoStore({ error: "unsupported_translation", message: "Only BSB text may be synthesized. ESV audio is not available through this route and must never be cached." }, 400);
-  }
+function missingKeyResponse(): Response {
+  return jsonNoStore(
+    {
+      error: "not_configured",
+      message: "ElevenLabs is not configured. Set ELEVENLABS_API_KEY on the server (never in NEXT_PUBLIC_ variables).",
+    },
+    501,
+  );
+}
 
-  const key = envValue("ELEVENLABS_API_KEY");
-  if (!key) {
-    return jsonNoStore(
-      {
-        error: "not_configured",
-        message: "ElevenLabs is not configured. Set ELEVENLABS_API_KEY on the server (never in NEXT_PUBLIC_ variables).",
-      },
-      501,
-    );
-  }
-
-  const speaker = entry.speakers[0] ?? "narrator";
-  const voiceEnv = audioMap.voices[speaker]?.voiceEnv;
-  if (!voiceEnv) {
-    return jsonNoStore({ error: "not_configured", message: `No voice mapping is defined for speaker "${speaker}".` }, 501);
-  }
-  const voiceId = envValue(voiceEnv);
-  if (!voiceId) {
-    return jsonNoStore(
-      {
-        error: "not_configured",
-        message: `${voiceEnv} is not set. Add the ElevenLabs voice ID for the ${speaker} role on the server.`,
-      },
-      501,
-    );
-  }
-
-  const body = bsbVersesFor(passage);
-  if (!body.ok) return jsonNoStore({ error: "text_unavailable", message: body.error }, 501);
-
+async function elevenLabsMpeg(voiceId: string, text: string, key: string): Promise<Response | Uint8Array> {
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`;
   let upstream: Response;
   try {
@@ -87,18 +72,22 @@ async function synthesizeBsb(entry: TtsAudioEntry, passage: ParsedPassage): Prom
         Accept: "audio/mpeg",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ text: body.text, model_id: "eleven_multilingual_v2" }),
+      body: JSON.stringify({ text, model_id: TTS_MODEL }),
     });
   } catch {
     return jsonNoStore({ error: "upstream_error", message: "Could not reach the speech service." }, 502);
   }
-
   if (!upstream.ok) {
     return jsonNoStore({ error: "upstream_error", message: "The speech service could not generate audio for this passage." }, 502);
   }
+  return new Uint8Array(await upstream.arrayBuffer());
+}
 
-  const audio = await upstream.arrayBuffer();
-  return new Response(audio, {
+function mpegResponse(bytes: Uint8Array): Response {
+  // Copied into a fresh ArrayBuffer so the Response body is a clean BufferSource.
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return new Response(copy, {
     status: 200,
     headers: {
       "Content-Type": "audio/mpeg",
@@ -109,9 +98,80 @@ async function synthesizeBsb(entry: TtsAudioEntry, passage: ParsedPassage): Prom
 }
 
 /**
+ * Concatenate same-format MP3 byte streams (same ElevenLabs model / output).
+ * MP3 is a sequence of frames, so joining the raw payloads plays back as one clip
+ * in common players. Joints may have a tiny click; we do not rewrite Xing headers.
+ */
+export function concatMpeg(parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((n, p) => n + p.byteLength, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const p of parts) {
+    out.set(p, offset);
+    offset += p.byteLength;
+  }
+  return out;
+}
+
+async function synthesizeBsb(entry: TtsAudioEntry, passage: ParsedPassage): Promise<Response> {
+  if (entry.translation !== "bsb") {
+    return jsonNoStore({ error: "unsupported_translation", message: "Only BSB text may be synthesized. ESV audio is not available through this route and must never be cached." }, 400);
+  }
+  const key = envValue("ELEVENLABS_API_KEY");
+  if (!key) return missingKeyResponse();
+
+  const speaker = entry.speakers[0] ?? "narrator";
+  const voice = resolveVoice(speaker);
+  if (!voice.ok) return jsonNoStore({ error: "not_configured", message: voice.error }, 501);
+
+  const body = bsbVersesFor(passage);
+  if (!body.ok) return jsonNoStore({ error: "text_unavailable", message: body.error }, 501);
+
+  const audio = await elevenLabsMpeg(voice.voiceId, body.text, key);
+  if (audio instanceof Response) return audio;
+  return mpegResponse(audio);
+}
+
+async function synthesizeSegments(entry: TtsSegmentsEntry): Promise<Response> {
+  if (entry.translation !== "bsb") {
+    return jsonNoStore({ error: "unsupported_translation", message: "Only BSB text may be synthesized. ESV audio is not available through this route and must never be cached." }, 400);
+  }
+  const key = envValue("ELEVENLABS_API_KEY");
+  if (!key) return missingKeyResponse();
+  if (!entry.segments.length) {
+    return jsonNoStore({ error: "invalid_mapping", message: "This passage has no speech segments." }, 500);
+  }
+
+  const totalChars = entry.segments.reduce((n, s) => n + s.text.length, 0);
+  if (totalChars > MAX_TTS_CHARS) {
+    return jsonNoStore({ error: "text_too_long", message: `Passage text is ${totalChars} characters; the limit is ${MAX_TTS_CHARS}.` }, 400);
+  }
+
+  // Resolve every speaker first so a missing narrator ID 501s before any upstream call.
+  const resolved = new Map<string, string>();
+  for (const segment of entry.segments) {
+    if (resolved.has(segment.speaker)) continue;
+    const voice = resolveVoice(segment.speaker);
+    if (!voice.ok) return jsonNoStore({ error: "not_configured", message: voice.error }, 501);
+    resolved.set(segment.speaker, voice.voiceId);
+  }
+
+  // Sequential calls stay under ElevenLabs Free-plan concurrency (max 2).
+  const parts: Uint8Array[] = [];
+  for (const segment of entry.segments) {
+    const voiceId = resolved.get(segment.speaker)!;
+    const audio = await elevenLabsMpeg(voiceId, segment.text, key);
+    if (audio instanceof Response) return audio;
+    parts.push(audio);
+  }
+  return mpegResponse(concatMpeg(parts));
+}
+
+/**
  * GET /api/speech?ref=Genesis+12
  * Looks up a mapped reference (never arbitrary text). Static BSB recordings are redirected;
- * TTS entries synthesize bundled BSB text only. ESV is refused and is never cached.
+ * tts-segments entries synthesize each speaker line in its cast voice and return one MP3.
+ * ESV is refused and is never cached.
  */
 export async function handleSpeechRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -153,13 +213,20 @@ export async function handleSpeechRequest(req: Request): Promise<Response> {
     return Response.redirect(new URL(file, url.origin), 302);
   }
 
+  if (found.entry.kind === "tts-segments") return synthesizeSegments(found.entry);
   return synthesizeBsb(found.entry, found.mapped);
 }
 
 /** Re-export parse hook so tests can reuse the cap against the stub text. */
 export function bsbTextLength(ref: string): number | undefined {
+  const found = findAudioEntry(ref);
+  if (found?.entry.kind === "tts-segments") {
+    return found.entry.segments.reduce((n, s) => n + s.text.length, 0);
+  }
   const parsed = parseReference(ref);
   if (!parsed.ok) return undefined;
   const body = bsbVersesFor(parsed.passage);
   return body.ok ? body.text.length : undefined;
 }
+
+export type { SpeechSegment, TtsAudioEntry };

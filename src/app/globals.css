@@ -82,3 +82,5 @@ button.art-frame { padding: 0; cursor: pointer; width: 100%; font: inherit; }
 .featured h2 { margin: 6px 0; font-size: 1.9rem; }
 .featured .go { display: inline-block; margin-top: 12px; background: var(--accent); padding: 10px 20px; border-radius: 999px; font-weight: 800; }
 @media (max-width: 860px) { .featured { grid-template-columns: 1fr; } }
+.speech-controls { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; align-items: flex-start; }
+.speech-controls audio { width: 100%; }

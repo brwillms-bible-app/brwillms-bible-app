@@ -1,0 +1,23 @@
+{
+  "_note": "Maps verse REFERENCES to audio, the same way scenes.json maps references to artwork. Never put Scripture text (especially never ESV) in this file. kind=file points at a public-domain recording under /audio/. kind=tts synthesizes bundled BSB text only; voice IDs are read from server env vars named below, never stored here.",
+  "voices": {
+    "narrator": { "voiceEnv": "ELEVENLABS_VOICE_NARRATOR" },
+    "jesus": { "voiceEnv": "ELEVENLABS_VOICE_JESUS" },
+    "peter": { "voiceEnv": "ELEVENLABS_VOICE_PETER" }
+  },
+  "entries": [
+    {
+      "id": "john-21-voice-test",
+      "passage": "John 21:1-25",
+      "kind": "file",
+      "file": "/audio/john-21-voice-test.mp3"
+    },
+    {
+      "id": "genesis-12",
+      "passage": "Genesis 12:1-9",
+      "kind": "tts",
+      "translation": "bsb",
+      "speakers": ["narrator"]
+    }
+  ]
+}

@@ -47,9 +47,9 @@ describe("compliance guards", () => {
     expect(clientFiles.length).toBeGreaterThan(0);
     for (const f of clientFiles) {
       const code = fs.readFileSync(f, "utf8");
-      expect(code, f).not.toMatch(/process\.env\.ESV|@\/lib\/esv\/(config|proxy)|api\.esv\.org/);
+      expect(code, f).not.toMatch(/process\.env\.ESV|process\.env\.ELEVENLABS|@\/lib\/esv\/(config|proxy)|@\/lib\/speech\/speechRoute|api\.esv\.org|api\.elevenlabs\.io/);
     }
-    for (const f of srcFiles) expect(fs.readFileSync(f, "utf8"), f).not.toMatch(/NEXT_PUBLIC_ESV/);
+    for (const f of srcFiles) expect(fs.readFileSync(f, "utf8"), f).not.toMatch(/NEXT_PUBLIC_ESV|NEXT_PUBLIC_ELEVENLABS/);
   });
 
   it("no TTS / speech synthesis and no monetization hooks", () => {
@@ -59,9 +59,14 @@ describe("compliance guards", () => {
     }
   });
 
-  it("no audio files or ESV text dumps are committed", () => {
+  it("committed audio may only be public-domain files under public/audio (never ESV)", () => {
     const all = walk(path.join(root, "public")).concat(srcFiles);
-    expect(all.some((f) => /\.(mp3|m4a|wav|ogg)$/i.test(f))).toBe(false);
+    const audio = all.filter((f) => /\.(mp3|m4a|wav|ogg)$/i.test(f));
+    for (const f of audio) {
+      const rel = path.relative(root, f);
+      expect(rel.startsWith("public/audio/"), rel).toBe(true);
+      expect(rel, rel).not.toMatch(/esv/i);
+    }
   });
 
   it("Genesis 12 scene matches the first-deliverable spec", () => {
@@ -86,6 +91,9 @@ describe("compliance guards", () => {
 
   it(".env files are gitignored and .env.example has no value", () => {
     expect(fs.readFileSync(path.join(root, ".gitignore"), "utf8")).toMatch(/^\.env\*$/m);
-    expect(fs.readFileSync(path.join(root, ".env.example"), "utf8")).toMatch(/^ESV_API_KEY=$/m);
+    const example = fs.readFileSync(path.join(root, ".env.example"), "utf8");
+    expect(example).toMatch(/^ESV_API_KEY=$/m);
+    expect(example).toMatch(/^ELEVENLABS_API_KEY=$/m);
+    expect(example).toMatch(/^ELEVENLABS_VOICE_NARRATOR=$/m);
   });
 });

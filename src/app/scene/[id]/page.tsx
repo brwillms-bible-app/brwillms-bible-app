@@ -5,6 +5,7 @@ import { getActiveProvider, providerInfo } from "@/lib/scripture/registry";
 import { ScenePlayer } from "@/components/ScenePlayer";
 import { BookIntroCard } from "@/components/BookIntroCard";
 import { MapPanel } from "@/components/MapPanel";
+import { findAudioEntry } from "@/lib/speech/audioMap";
 
 // Rendered per request so the active provider reflects the live server env.
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export default async function ScenePage({ params }: { params: Promise<{ id: stri
         provider={provider}
         objective={scene.objectiveId ? objectives[scene.objectiveId] : undefined}
         route={scene.mapRoute ? routes[scene.mapRoute] : undefined}
+        speechRef={provider.id !== "esv" ? findAudioEntry(scene.passage)?.mapped.display : undefined}
       />
       <div className="side-by-side">
         <BookIntroCard name={scene.book} intro={bookIntros[scene.book]} />

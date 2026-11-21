@@ -20,6 +20,8 @@ interface Props {
   provider: ProviderInfo;
   objective?: Objective;
   route?: MapRoute;
+  /** Mapped BSB audio reference, if any. Omit for ESV (ESV audio stays on the live proxy). */
+  speechRef?: string;
 }
 
 /**
@@ -28,10 +30,13 @@ interface Props {
  * The response lives only in component state (memory) for this scene — never in any browser
  * storage (web storage, databases, cache storage) or a worker cache.
  */
-export function ScenePlayer({ passage, image, title, duration, provider, objective, route }: Props) {
+export function ScenePlayer({ passage, image, title, duration, provider, objective, route, speechRef: mappedSpeechRef }: Props) {
   const [state, setState] = useState<State>({ status: "idle" });
   const [playing, setPlaying] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const speechRef = useRef<HTMLAudioElement>(null);
+  const speech = mappedSpeechRef;
   const ctrlRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => ctrlRef.current?.abort(), []);
@@ -55,6 +60,29 @@ export function ScenePlayer({ passage, image, title, duration, provider, objecti
 
   const data = state.status === "ok" ? state.data : undefined;
   const isEsv = (data?.provider.id ?? provider.id) === "esv";
+
+  const playSpeech = () => {
+    const el = speechRef.current;
+    if (!el || !mappedSpeechRef) return;
+    setSpeechError(null);
+    // Set src and play inside the tap handler so iOS Safari (which blocks autoplay) allows playback.
+    el.src = `/api/speech?ref=${encodeURIComponent(mappedSpeechRef)}`;
+    const attempt = el.play();
+    if (attempt) {
+      attempt.catch(async () => {
+        try {
+          const res = await fetch(`/api/speech?ref=${encodeURIComponent(mappedSpeechRef)}`, { cache: "no-store" });
+          if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            setSpeechError(typeof body?.message === "string" ? body.message : "Could not play audio.");
+          }
+        } catch {
+          setSpeechError("Could not play audio.");
+        }
+      });
+    }
+  };
+
 
   return (
     <div className="player">
@@ -118,9 +146,27 @@ export function ScenePlayer({ passage, image, title, duration, provider, objecti
                 onPause={() => setPlaying(false)}
                 onContextMenu={(e) => e.preventDefault()}
               />
-            ) : (
+            ) : speech ? null : (
               <p className="audio-soon" data-testid="audio-soon">🔊 Audio coming soon</p>
             ))}
+          {speech && (
+            <div className="speech-controls" data-testid="speech-controls">
+              <button type="button" className="big" onClick={playSpeech} data-testid="play-speech">
+                ▶ Play audio
+              </button>
+              <audio
+                ref={speechRef}
+                controls
+                controlsList="nodownload noplaybackrate"
+                preload="none"
+                onContextMenu={(e) => e.preventDefault()}
+              />
+              <p className="fineprint">
+                Playback starts when you tap Play. iPhones and iPads block audio that starts by itself.
+              </p>
+              {speechError && <div className="banner error">{speechError}</div>}
+            </div>
+          )}
           {/* Mandatory Crossway notice whenever the ESV is the active provider. */}
           {isEsv ? (
             <EsvNotice compact />
